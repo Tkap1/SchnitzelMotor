@@ -9,6 +9,21 @@
 // #############################################################################
 static GameState* gameState;
 
+static IRect solids [] =
+{
+  // {48 * 2, 48, 48 * 8, 48},
+  // {624, 96, 480, 48},
+  {48 * 13, 48 * 2, 48, 48 * 8},
+  {48 *  8, 48 * 2, 48, 48 * 8},
+  {0, 624, 1048, 48},
+  // {1048 + 240, 624, 1048, 48},
+  // {1040 - 240, 96 * 4, 480, 48},
+  // {48 * 3, 48 * 10, 48 * 3, 48},
+  // {48 * 5, 48 * 7, 48 * 2, 48},
+  // {48 * 9, 48 * 5, 48 * 3, 48},
+};
+
+
 // #############################################################################
 //                           Game Functions
 // #############################################################################
@@ -21,30 +36,14 @@ IRect get_player_rect();
 // #############################################################################
 //                           Update Game (Exported from DLL)
 // #############################################################################
-EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* renderDataIn, BumpAllocator* allocator, PlaySoundFunc play_sound)
+
+void update(PlaySoundFunc play_sound)
 {
-  if(gameState != gameStateIn)
-  {
-    input = inputIn;
-    renderData = renderDataIn;
-    gameState = gameStateIn;
-
-  }
-
-  if(!gameState->initialized)
-  {
-    gameState->initialized = true;
-    gameState->jumpSound = load_wav("assets/sounds/jump.wav", allocator);
-    gameState->wallJumpSound = load_wav("assets/sounds/wall.wav", allocator);
-    gameState->playerPos = {50, -100};
-  }
-
-
-
   update_game_input();
 
-  // This is inside of the data section of the memory, int the exe
-  float dt = 1.0f / 60.0f;
+  gameState->prevPlayerPos = gameState->playerPos;
+
+  float dt = UPDATE_DELAY;
   float maxRunSpeed = 10.0f;
   float wallJumpSpeed = 15.0f;
   float runAcceleration = 50.0f;
@@ -55,6 +54,8 @@ EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* r
   float runReduce = 80.0f;
   float wallClimbSpeed = -4.0f;
   float wallSlideDownSpeed = 8.0f;
+
+  // This is inside of the data section of the memory, in the exe
   static Vec2 speed;
   static float highestHeight = input->screenSize.y;
   static float varJumpTimer = 0.0f;
@@ -63,25 +64,6 @@ EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* r
   static float wallJumpTimer = 0.0f;
   static bool playerGrounded = true;
   static bool grabbingWall = false;
-
-  static IRect solids [] =
-  {
-    // {48 * 2, 48, 48 * 8, 48},
-    // {624, 96, 480, 48},
-    {48 * 13, 48 * 2, 48, 48 * 8},
-    {48 *  8, 48 * 2, 48, 48 * 8},
-    {0, 624, 1048, 48},
-    // {1048 + 240, 624, 1048, 48},
-    // {1040 - 240, 96 * 4, 480, 48},
-    // {48 * 3, 48 * 10, 48 * 3, 48},
-    // {48 * 5, 48 * 7, 48 * 2, 48},
-    // {48 * 9, 48 * 5, 48 * 3, 48},
-  };
-
-  for(int solidIdx = 0; solidIdx < ArraySize(solids); solidIdx++)
-  {
-    draw_quad(solids[solidIdx].pos, solids[solidIdx].size);
-  }
 
   if(key_pressed_this_frame(KEY_R))
   {
@@ -126,7 +108,7 @@ EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* r
     }
   }
 
-  // firction
+  // friction
   if(!is_down(INPUT_MOVE_LEFT) &&
      !is_down(INPUT_MOVE_RIGHT))
   {
@@ -263,7 +245,7 @@ EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* r
       speed.y = approach(speed.y, wallSlideDownSpeed, runAcceleration * mult * dt);
     }
 
-    // firction
+    // friction
     if(grabbingWall &&
       !is_down(INPUT_MOVE_UP) &&
       !is_down(INPUT_MOVE_DOWN))
@@ -362,10 +344,62 @@ EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* r
     }
   }
 
+  // Reset Input
+  for(int keyIdx = 0; keyIdx < 512; keyIdx++)
+  {
+    input->keys[keyIdx].justReleased = false;
+    input->keys[keyIdx].justPressed = false;
+    input->keys[keyIdx].halfTransitionCount = 0;
+  }
+
+}
+
+void draw(float interp_dt)
+{
+  for(int solidIdx = 0; solidIdx < ArraySize(solids); solidIdx++)
+  {
+    draw_quad(solids[solidIdx].pos, solids[solidIdx].size);
+  }
+
   IRect playerRect = get_player_rect();
-  draw_quad(playerRect.pos, playerRect.size);
-  draw_sprite(SPRITE_CELESTE_01, vec_2(gameState->playerPos));
+  IVec2 playerPos = lerp(gameState->prevPlayerPos, gameState->playerPos, interp_dt);
+
+  // @Note(tkap, 13/07/2023): I'm sorry
+  {
+    IVec2 temp = playerPos;
+    temp.x += 30;
+    temp.y += 12;
+    draw_quad(temp, playerRect.size);
+  }
+  draw_sprite(SPRITE_CELESTE_01, vec_2(playerPos));
   // draw_quad(gameState.playerPos, {50.0f, 50.0f});
+}
+
+EXPORT_FN void update_game(GameState* gameStateIn, Input* inputIn, RenderData* renderDataIn, BumpAllocator* allocator, PlaySoundFunc play_sound, double frameTime)
+{
+  if(gameState != gameStateIn)
+  {
+    input = inputIn;
+    renderData = renderDataIn;
+    gameState = gameStateIn;
+  }
+
+  if(!gameState->initialized)
+  {
+    gameState->initialized = true;
+    gameState->jumpSound = load_wav("assets/sounds/jump.wav", allocator);
+    gameState->wallJumpSound = load_wav("assets/sounds/wall.wav", allocator);
+    gameState->playerPos = {50, -100};
+  }
+
+  gameState->updateTimer += frameTime;
+  while(gameState->updateTimer >= UPDATE_DELAY)
+  {
+    gameState->updateTimer -= UPDATE_DELAY;
+    update(play_sound);
+  }
+  float interp_dt = (float)(gameState->updateTimer / UPDATE_DELAY);
+  draw(interp_dt);
 }
 
 // #############################################################################

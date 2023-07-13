@@ -65,3 +65,11 @@ bool platform_init_sound()
 {
     return false;
 }
+
+void platform_init_time()
+{
+}
+
+double platform_get_seconds()
+{
+}

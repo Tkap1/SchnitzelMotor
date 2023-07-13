@@ -43,6 +43,8 @@ static HWND window;
 static HDC dc;
 static PFNGLDEBUGMESSAGECALLBACKPROC glDebugMessageCallback_ptr;
 static Voice voiceArr[MAX_CONCURRENT_SOUNDS];
+static uint64_t cycle_frequency;
+static uint64_t start_cycles;
 
 // #############################################################################
 //                           Platform Implementations
@@ -445,7 +447,7 @@ void glDebugMessageCallback (GLDEBUGPROC callback, const void *userParam)
   glDebugMessageCallback_ptr(callback, userParam);
 }
 
-void platform_reaload_dynamic_library()
+void platform_reload_dynamic_library()
 {
   static HMODULE gameDLL;
   static long long lastTimestampGameDLL;
@@ -544,4 +546,17 @@ bool platform_init_sound()
 
 	return true;
 
+}
+
+void platform_init_time()
+{
+  QueryPerformanceFrequency((LARGE_INTEGER*)&cycle_frequency);
+  QueryPerformanceCounter((LARGE_INTEGER*)&start_cycles);
+}
+
+double platform_get_seconds()
+{
+  uint64_t now;
+  QueryPerformanceCounter((LARGE_INTEGER*)&now);
+  return (now - start_cycles) / (double)cycle_frequency;
 }
